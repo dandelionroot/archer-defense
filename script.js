@@ -20,8 +20,10 @@ function Arrow() {
 		y : 0
 	}
 	this.isFlying = false;
+	this.dTheta = 0.38;
 }
 
+Arrow.prototype.dTheta = 0.38;
 Arrow.prototype.dy = 0.1;
 Arrow.prototype.length = 200;
 Arrow.prototype.toFlying = function () {
@@ -30,13 +32,21 @@ Arrow.prototype.toFlying = function () {
 Arrow.prototype.toNotFlying = function () {
 	this.isFlying = false;
 };
-Arrow.prototype.saveVelocity = function () {
-	this.velocity.x = Math.abs(Mouse.position.x - Bow.center.x)/10;
-	this.velocity.y = -Math.abs(Mouse.position.y - Bow.center.y)/10;
+Arrow.prototype.saveVelocity = function (Mouse) {
+	this.velocity.x = -(Mouse.position.x - Bow.center.x)/10;
+	this.velocity.y = -(Mouse.position.y - Bow.center.y)/10;
 };
+Arrow.prototype.rotateTail = function (dTheta) {
+	var dSetDegree = dTheta * Math.PI / 180;
+	var cosq = Math.cos(dSetDegree);
+	var sinq = Math.sin(dSetDegree);
+	var sx = this.tail.x - this.head.x;
+	var sy = this.tail.y - this.head.y;
+	this.tail.x = (sx * cosq - sy * sinq) + this.head.x;
+	this.tail.y = (sx * sinq + sy * cosq) + this.head.y;
+}
 
 var canvas = document.getElementById('myCanvas');
-var context = canvas.getContext("2d");
 
 var Mouse = {
 	position : {
@@ -89,12 +99,12 @@ var Bow = {
 	width : 15,
 	radius : 50,
 	color : "blue",
-	draw : function () {
+	draw : function (Mouse) {
 		var context = canvas.getContext("2d");
 		var distX = Math.abs(this.center.x - Mouse.position.x);
 		var distY = Math.abs(this.center.y - Mouse.position.y);
 		var dist = Math.sqrt(distX * distX + distY * distY);
-		if(Bow.center.y > Mouse.position.y)
+		if(this.center.y > Mouse.position.y)
 			this.rotRadian = Math.acos((this.center.x - Mouse.position.x) / dist) + Math.PI / 2;
 		else
 			this.rotRadian = Math.asin((this.center.x - Mouse.position.x) / dist);
@@ -128,16 +138,16 @@ var BowButton = {
 
 var BowString = {
 	leftEdge : {
-		x : Bow.center.x - Bow.radius * Math.sin(Bow.rotRadian),
-		y : Bow.center.y - Bow.radius * Math.cos(Bow.rotRadian)
+		x : 0,
+		y : 0
 	},
 	rightEdge : {
-		x : Bow.center.x + Bow.radius * Math.sin(Bow.rotRadian),
-		y : Bow.center.y + Bow.radius * Math.cos(Bow.rotRadian)
+		x : 0,
+		y : 0
 	},
 	width : 5,
 	color : "black",
-	draw : function () {
+	draw : function (Bow, BowButton) {
 		this.leftEdge.x = Bow.center.x + Bow.radius * Math.sin(Bow.rotRadian + Math.PI/2);
 		this.leftEdge.y = Bow.center.y - Bow.radius * Math.cos(Bow.rotRadian + Math.PI/2);
 		this.rightEdge.x = Bow.center.x - Bow.radius * Math.sin(Bow.rotRadian + Math.PI/2);
@@ -158,38 +168,45 @@ var Arrows = {
 	isAiming : false,
 	number : 0,
 	length : 220,
-	color : "orange",
+	rodColor : "orange",
+	headColor : "green",
 	generate : function () {
 		this.objs[this.number] = new Arrow();
 		this.number++;
 	},
-	draw : function () {
+	drawRodAndHead : function (arrow) {
+		context = canvas.getContext('2d');
+		context.beginPath();
+		context.moveTo(arrow.tail.x, arrow.tail.y);
+		context.lineTo(arrow.head.x, arrow.head.y);
+		context.strokeStyle = this.rodColor;
+		context.stroke();
+		context.beginPath();
+		context.arc(arrow.head.x, arrow.head.y, 5, 0, Math.PI * 2, true);
+		context.closePath();
+		context.fillStyle = this.headColor;
+		context.fill();
+	},
+	draw : function (Bow, BowButton) {
 		if(BowButton.isClicked == true && this.isAiming == true) {
 			this.objs[this.number-1].tail.x = BowButton.x;
 			this.objs[this.number-1].tail.y = BowButton.y;
 			this.objs[this.number-1].head.x = BowButton.x + this.length * Math.sin(Bow.rotRadian); 
 			this.objs[this.number-1].head.y = BowButton.y - this.length * Math.cos(Bow.rotRadian); 
-			context = canvas.getContext('2d');
-			context.beginPath();
-			context.moveTo(this.objs[this.number-1].tail.x, this.objs[this.number-1].tail.y);
-			context.lineTo(this.objs[this.number-1].head.x, this.objs[this.number-1].head.y);
-			context.strokeStyle = this.color;
-			context.stroke();
+			this.drawRodAndHead(this.objs[this.number-1]);
 		}
 		for(var i=0; i<this.number; i++) {
 			var arrow = this.objs[i];
 			if(arrow.isFlying == true) {
+				if(arrow.velocity.x < 0)
+					arrow.dTheta = 360 - arrow.dTheta;
+				arrow.rotateTail(arrow.dTheta);
 				arrow.tail.x += arrow.velocity.x;
 				arrow.tail.y += arrow.velocity.y;
 				arrow.head.x += arrow.velocity.x;
 				arrow.head.y += arrow.velocity.y;
 				arrow.velocity.y += arrow.dy;
-				context = canvas.getContext('2d');
-				context.beginPath();
-				context.moveTo(arrow.tail.x, arrow.tail.y);
-				context.lineTo(arrow.head.x, arrow.head.y);
-				context.strokeStyle = this.color;
-				context.stroke();
+				this.drawRodAndHead(arrow);
 				if(arrow.head.x > 1500 || arrow.head.y > 500)
 					arrow.toNotFlying();
 			}
@@ -217,10 +234,11 @@ canvas.addEventListener('mousedown', function() {
 
 canvas.addEventListener('mouseup', function() {
 	BowButton.toOriginal();
-	if(Arrows.isAiming == true)
+	if(Arrows.isAiming == true) {
 		Arrows.isAiming = false;
-	Arrows.objs[Arrows.number-1].toFlying();
-	Arrows.objs[Arrows.number-1].saveVelocity();
+		Arrows.objs[Arrows.number-1].toFlying();
+		Arrows.objs[Arrows.number-1].saveVelocity(Mouse);
+	}
 }, false);
 
 setInterval(function () {
@@ -228,13 +246,15 @@ setInterval(function () {
 }, 1500);
 
 setInterval(function () {
+	context = canvas.getContext('2d');
 	context.clearRect(0, 0, canvas.width, canvas.height);
 	Enemies.draw();
-	Bow.draw();
+	Bow.draw(Mouse);
 	BowButton.draw();
-	BowString.draw();
-	Arrows.draw();
+	BowString.draw(Bow, BowButton);
+	Arrows.draw(Bow, BowButton);
 	context.font = "italic 20px";
+	context.fillStyle = "black";
 	context.fillText("mouse -> x : " + Mouse.position.x + ", y : " + Mouse.position.y, 20, 20);
 }, 10);
 
