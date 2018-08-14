@@ -3,7 +3,7 @@ function Enemy() {
 	this.y = 400;
 }
 
-Enemy.prototype.dx = -5;
+Enemy.prototype.dx = -1;
 Enemy.prototype.dy = 0;
 
 function Arrow() {
@@ -243,7 +243,7 @@ canvas.addEventListener('mouseup', function() {
 
 setInterval(function () {
 	Enemies.generate();
-}, 1500);
+}, 5000);
 
 setInterval(function () {
 	context = canvas.getContext('2d');
